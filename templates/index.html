@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Face Match</title>
+</head>
+<body>
+    <h1>Face Recognition Match</h1>
+    <form method="POST" enctype="multipart/form-data">
+        <label>Select an image:</label>
+        <input type="file" name="image" accept="image/*" required>
+        <button type="submit">Match</button>
+    </form>
+
+    {% if matched_images %}
+        <h2>Matched Images:</h2>
+        <ul>
+            {% for img in matched_images %}
+                <li>
+                    <img src="{{ url_for('download_file', filename=img) }}" alt="{{ img }}" width="150">
+                    <br>
+                    <a href="{{ url_for('download_file', filename=img) }}" download>Download {{ img }}</a>
+                </li>
+            {% endfor %}
+        </ul>
+    {% elif request.method == 'POST' %}
+        <p><strong>No matches found.</strong></p>
+    {% endif %}
+</body>
+</html>

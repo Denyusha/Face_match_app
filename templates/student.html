@@ -1,0 +1,222 @@
+{% extends "base.html" %}
+
+{% block title %}Student Panel - Face Matching System{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row">
+        <div class="col-md-6">
+            <div class="card mb-4">
+                <div class="card-body">
+                    <h5 class="card-title mb-4">
+                        <i class="fas fa-upload me-2"></i>
+                        Upload Image
+                    </h5>
+                    <form method="POST" enctype="multipart/form-data" id="uploadForm">
+                        <div class="upload-area mb-3">
+                            <i class="fas fa-cloud-upload-alt fa-3x text-primary mb-3"></i>
+                            <h6>Drag and drop your image here</h6>
+                            <p class="text-muted small">or</p>
+                            <input type="file" class="form-control" id="image" name="image" accept="image/*" required>
+                            <div class="form-text mt-2">Supported formats: JPG, JPEG, PNG</div>
+                        </div>
+                        <button type="submit" class="btn btn-primary w-100" id="uploadBtn">
+                            <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
+                            <i class="fas fa-search me-2"></i>
+                            Upload and Match
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title mb-4">
+                        <i class="fas fa-images me-2"></i>
+                        Matched Images
+                    </h5>
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <span class="badge bg-primary rounded-pill">
+                            Total Matches: {{ matched_images|length }}
+                        </span>
+                        <div>
+                            <button class="btn btn-danger btn-sm me-2" id="removeUnmatchedBtn" {% if not matched_images %}disabled{% endif %}>
+                                <i class="fas fa-trash me-1"></i>
+                                Remove All
+                            </button>
+                            <button class="btn btn-success btn-sm" id="downloadAllBtn" {% if not matched_images %}disabled{% endif %}>
+                                <i class="fas fa-download me-1"></i>
+                                Download All
+                            </button>
+                        </div>
+                    </div>
+                    
+                    {% if matched_images %}
+                        <div class="row g-3">
+                            {% for image in matched_images %}
+                            <div class="col-md-6">
+                                <div class="card h-100">
+                                    <img src="{{ url_for('get_image', image_id=image.image_id) }}" 
+                                         class="card-img-top" 
+                                         alt="Matched image"
+                                         style="height: 200px; object-fit: cover;">
+                                    <div class="card-body">
+                                        <div class="d-flex justify-content-between align-items-center mb-3">
+                                            <span class="confidence-badge">
+                                                {{ image.confidence }}
+                                            </span>
+                                        </div>
+                                        <div class="btn-group w-100">
+                                            <button class="btn btn-sm btn-primary preview-btn" data-id="{{ image.image_id }}">
+                                                <i class="fas fa-eye"></i>
+                                            </button>
+                                            <a href="{{ url_for('download_image', image_id=image.image_id) }}" 
+                                               class="btn btn-sm btn-success">
+                                                <i class="fas fa-download"></i>
+                                            </a>
+                                            <button class="btn btn-sm btn-danger remove-btn" data-id="{{ image.image_id }}">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="text-center py-5">
+                            <i class="fas fa-images fa-3x text-muted mb-3"></i>
+                            <p class="text-muted">No matches found yet. Upload an image to find matches.</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const uploadForm = document.getElementById('uploadForm');
+        const uploadBtn = document.getElementById('uploadBtn');
+        const spinner = uploadBtn.querySelector('.spinner-border');
+        const removeUnmatchedBtn = document.getElementById('removeUnmatchedBtn');
+        const downloadAllBtn = document.getElementById('downloadAllBtn');
+        const removeButtons = document.querySelectorAll('.remove-btn');
+        const previewButtons = document.querySelectorAll('.preview-btn');
+
+        // Handle form submission
+        uploadForm.addEventListener('submit', function() {
+            uploadBtn.disabled = true;
+            spinner.classList.remove('d-none');
+        });
+
+        // Preview button functionality
+        previewButtons.forEach(btn => {
+            btn.addEventListener('click', function() {
+                const imageId = this.dataset.id;
+                const previewUrl = `/image/${imageId}`;
+                
+                // Create modal for preview
+                const modal = document.createElement('div');
+                modal.className = 'modal fade';
+                modal.id = 'previewModal';
+                modal.setAttribute('tabindex', '-1');
+                modal.innerHTML = `
+                    <div class="modal-dialog modal-lg modal-dialog-centered">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title">Image Preview</h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                            </div>
+                            <div class="modal-body text-center">
+                                <img src="${previewUrl}" class="preview-image" alt="Preview">
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                document.body.appendChild(modal);
+                const modalInstance = new bootstrap.Modal(modal);
+                modalInstance.show();
+                
+                // Clean up modal when closed
+                modal.addEventListener('hidden.bs.modal', function() {
+                    document.body.removeChild(modal);
+                });
+            });
+        });
+
+        // Handle individual remove
+        removeButtons.forEach(btn => {
+            btn.addEventListener('click', function() {
+                if (confirm('Are you sure you want to remove this image?')) {
+                    const imageId = this.dataset.id;
+                    const card = this.closest('.col-md-6');
+                    
+                    // Remove the card from view
+                    card.remove();
+                    
+                    // Update buttons state
+                    updateButtonsState();
+                }
+            });
+        });
+
+        // Handle remove all
+        removeUnmatchedBtn.addEventListener('click', function() {
+            if (confirm('Are you sure you want to remove all images?')) {
+                // Remove all cards
+                document.querySelectorAll('.col-md-6').forEach(card => {
+                    card.remove();
+                });
+                
+                // Update buttons state
+                updateButtonsState();
+            }
+        });
+
+        // Handle download all
+        downloadAllBtn.addEventListener('click', function() {
+            // Get all image IDs
+            const imageIds = Array.from(document.querySelectorAll('.card')).map(card => {
+                return card.querySelector('.remove-btn').dataset.id;
+            });
+            
+            if (imageIds.length === 0) {
+                alert('No images to download');
+                return;
+            }
+            
+            // Create a form and submit it to trigger downloads
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = '/download_all';
+            
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'image_ids';
+            input.value = JSON.stringify(imageIds);
+            
+            form.appendChild(input);
+            document.body.appendChild(form);
+            form.submit();
+            document.body.removeChild(form);
+        });
+
+        // Update buttons state based on remaining images
+        function updateButtonsState() {
+            const remainingImages = document.querySelectorAll('.card').length;
+            removeUnmatchedBtn.disabled = remainingImages === 0;
+            downloadAllBtn.disabled = remainingImages === 0;
+        }
+    });
+</script>
+{% endblock %} 

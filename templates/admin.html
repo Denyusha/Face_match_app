@@ -1,0 +1,219 @@
+{% extends "base.html" %}
+
+{% block title %}Admin Panel - Face Matching System{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row">
+        <div class="col-md-6">
+            <div class="card mb-4">
+                <div class="card-body">
+                    <h5 class="card-title mb-4">
+                        <i class="fas fa-upload me-2"></i>
+                        Upload Training Images
+                    </h5>
+                    <form id="uploadForm" enctype="multipart/form-data">
+                        <div class="upload-area mb-3">
+                            <i class="fas fa-cloud-upload-alt fa-3x text-primary mb-3"></i>
+                            <h6>Drag and drop your images here</h6>
+                            <p class="text-muted small">or</p>
+                            <input type="file" class="form-control" id="files" name="files[]" multiple accept="image/*" required>
+                            <div class="form-text mt-2">Supported formats: JPG, JPEG, PNG</div>
+                        </div>
+                        <button type="submit" class="btn btn-primary w-100" id="uploadBtn">
+                            <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
+                            <i class="fas fa-upload me-2"></i>
+                            Upload and Train
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title mb-4">
+                        <i class="fas fa-images me-2"></i>
+                        Training Images
+                    </h5>
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <span class="badge bg-primary rounded-pill">
+                            Total Images: {{ uploaded_images|length }}
+                        </span>
+                        <button class="btn btn-danger btn-sm" id="deleteAllBtn" {% if not uploaded_images %}disabled{% endif %}>
+                            <i class="fas fa-trash me-1"></i>
+                            Delete All
+                        </button>
+                    </div>
+                    
+                    {% if uploaded_images %}
+                        <div class="table-responsive">
+                            <table class="table">
+                                <thead>
+                                    <tr>
+                                        <th>
+                                            <input type="checkbox" id="selectAll" class="form-check-input">
+                                        </th>
+                                        <th>Filename</th>
+                                        <th>Upload Date</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for image in uploaded_images %}
+                                    <tr>
+                                        <td>
+                                            <input type="checkbox" class="form-check-input image-checkbox" value="{{ image._id }}">
+                                        </td>
+                                        <td>{{ image.filename }}</td>
+                                        <td>{{ image.upload_date.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                                        <td>
+                                            <div class="btn-group">
+                                                <button class="btn btn-sm btn-danger delete-btn" data-id="{{ image._id }}">
+                                                    <i class="fas fa-trash"></i>
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <div class="text-center py-5">
+                            <i class="fas fa-images fa-3x text-muted mb-3"></i>
+                            <p class="text-muted">No training images uploaded yet.</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const uploadForm = document.getElementById('uploadForm');
+        const uploadBtn = document.getElementById('uploadBtn');
+        const spinner = uploadBtn.querySelector('.spinner-border');
+        const deleteAllBtn = document.getElementById('deleteAllBtn');
+        const selectAll = document.getElementById('selectAll');
+        const imageCheckboxes = document.querySelectorAll('.image-checkbox');
+        const deleteButtons = document.querySelectorAll('.delete-btn');
+
+        // Handle form submission
+        uploadForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData();
+            const files = document.getElementById('files').files;
+            
+            for (let i = 0; i < files.length; i++) {
+                formData.append('files[]', files[i]);
+            }
+            
+            uploadBtn.disabled = true;
+            spinner.classList.remove('d-none');
+            
+            fetch('{{ url_for("admin_panel") }}', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert(data.message);
+                    window.location.reload();
+                } else {
+                    alert(data.message);
+                }
+            })
+            .catch(error => {
+                alert('Error uploading files: ' + error);
+            })
+            .finally(() => {
+                uploadBtn.disabled = false;
+                spinner.classList.add('d-none');
+            });
+        });
+
+        // Delete button functionality
+        document.querySelectorAll('.delete-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                if (confirm('Are you sure you want to delete this image?')) {
+                    const imageId = this.dataset.id;
+                    fetch(`/delete_image/${imageId}`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        }
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            // Remove the row from the table
+                            this.closest('tr').remove();
+                        } else {
+                            alert('Error deleting image: ' + data.message);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        alert('Error deleting image');
+                    });
+                }
+            });
+        });
+
+        // Handle select all
+        selectAll.addEventListener('change', function() {
+            imageCheckboxes.forEach(checkbox => {
+                checkbox.checked = this.checked;
+            });
+            updateDeleteAllButton();
+        });
+
+        // Handle individual checkbox changes
+        imageCheckboxes.forEach(checkbox => {
+            checkbox.addEventListener('change', updateDeleteAllButton);
+        });
+
+        // Update delete all button state
+        function updateDeleteAllButton() {
+            const checkedBoxes = document.querySelectorAll('.image-checkbox:checked');
+            deleteAllBtn.disabled = checkedBoxes.length === 0;
+        }
+
+        // Handle delete all
+        deleteAllBtn.addEventListener('click', function() {
+            if (confirm('Are you sure you want to delete all selected images?')) {
+                const selectedIds = Array.from(document.querySelectorAll('.image-checkbox:checked'))
+                    .map(checkbox => checkbox.value);
+                
+                fetch('/delete_images', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ image_ids: selectedIds })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert(data.message);
+                        window.location.reload();
+                    } else {
+                        alert(data.message);
+                    }
+                })
+                .catch(error => {
+                    alert('Error deleting images: ' + error);
+                });
+            }
+        });
+    });
+</script>
+{% endblock %} 
